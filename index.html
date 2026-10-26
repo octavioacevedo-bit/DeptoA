@@ -28,7 +28,7 @@ main{padding:14px 18px;max-width:1100px;margin:auto}.kp{display:grid;grid-templa
 <label>Fecha de referencia <input type="date" id="ref"></label>
 <label>Alertar terminación a <input type="number" id="hz" min="0" style="width:62px"> días</label>
 <label>Tu nombre <input id="usr" placeholder="para firmar notas" style="width:140px"></label>
-<button onclick="sync(true)">↻ Sincronizar</button><button onclick="exp()">⬇ Exportar</button>
+<button onclick="sync(true)">↻ Sincronizar</button><button onclick="exp()">⬇ Exportar Excel</button><button onclick="expJson()" title="Copia de seguridad para volver a importar">💾 Respaldo .json</button>
 <button onclick="$('#imp').click()">⬆ Importar</button><button onclick="$('#xl').click()">📊 Cargar Excel</button>
 <input type="file" id="imp" accept=".json" hidden><input type="file" id="xl" accept=".xlsx,.xls" hidden>
 <span id="st" class="mu"></span></div>
@@ -61,7 +61,7 @@ function setP(path,val){let o=S;path.slice(0,-1).forEach(k=>o=o[k]=o[k]||{});con
 async function sync(m){if(!FB){if(m)stat('Sin Firebase configurado: datos locales');return}
  try{const j=await(await fetch(FB+'/seg.json')).json();S=j||{};persist();const d=await(await fetch(FB+'/data.json')).json();if(d&&d.projects)P=d.projects;stat('Sincronizado '+new Date().toLocaleTimeString());if(!document.activeElement.matches('textarea,input'))render()}catch(e){stat('No se pudo sincronizar')}}
 /* ---- reglas de la metodología ---- */
-const SC={1:{t:'Asignación de recursos en el SPGR (desde migración a GESPROY)',w:45,r:60,l:'100 pts ≤45 días · 0 pts >60 días'},
+const SC={1:{t:'Asignación de recursos en el SPGR (desde migración a GESPROY = fecha de aprobación)',w:45,r:60,l:'100 pts ≤45 días · 0 pts >60 días'},
 2:{t:'Apertura del primer proceso precontractual (desde publicación del acuerdo de aprobación)',w:150,r:183,l:'100 pts ≤6 meses · 0 pts >6 meses'},
 3:{t:'Firma del primer contrato (desde suscripción del primer proceso de selección)',w:120,r:183,l:'100 pts ≤120 días · 0 pts >6 meses'}};
 const CIERRE=['Indicadores de producto verificados','Beneficiarios verificados','Alcance verificado','Contratos cargados correctamente en el sistema'];
@@ -75,7 +75,7 @@ function alerts(p){const a=[],b=p.bpin,st=p.estado;
    if(q>=qR)add('ev','red',`Se evalúa UNA sola vez en ${qL(q)} (reporte hasta ${fmt(qDead(q))}). Verificar indicadores, soportes y que quede bien reportado.`,['Indicadores de producto al 100% / cumplimiento calculado','Soportes cargados (DMNC con acto administrativo si aplica)','Reporte del trimestre enviado a tiempo']);
    else add('ya','blue',`Ya evaluado en ${qL(q)}: no se vuelve a medir. Prioridad baja; seguimiento hasta el cierre.`,[{k:'cerrado',l:'Cerrado en el sistema'}])}}
  else{
-  if(st==='SIN CONTRATAR'){for(let n=1;n<=3;n++){if(chk(b,'e'+n))continue;const s=SC[n],ini=D(fld(b,`e${n}_ini`))||(n==2?D(p.faprob):null);
+  if(st==='SIN CONTRATAR'){for(let n=1;n<=3;n++){if(chk(b,'e'+n))continue;const s=SC[n],ini=D(fld(b,`e${n}_ini`))||(n<=2?D(p.faprob):null);
     if(!ini)add('e'+n,'amber',`Escenario ${n}: registrar fecha de inicio (${s.t})`,[{k:'e'+n,l:'Escenario cumplido'}]);
     else{const dd=Math.floor((ref-ini)/864e5);add('e'+n,dd>s.r?'red':dd>s.w?'amber':'blue',`Escenario ${n}: ${s.t} — ${dd} días transcurridos (${s.l})`,[{k:'e'+n,l:'Escenario cumplido'}])}break}}
   if(st==='CONTRATADO SIN ACTA DE INICIO')add('acta','amber','Sin acta de inicio: al firmar contrato o crearse el primer RP pasa a En ejecución; la programación se registra dentro de 30 días',['Acta de inicio firmada','Primer contrato / RP registrado','Programación cargada']);
@@ -100,24 +100,24 @@ function resNote(b,id,r){const n=sg(b,'n',id);setP([b,'n',id],{...n,r,ru:r?usr()
 const tog=b=>{open.has(b)?open.delete(b):open.add(b);render()};
 /* ---- render ---- */
 function card(p,A,pr){const b=p.bpin,o=open.has(b),ab=A.filter(x=>!x.done),N=Object.entries(sg(b,'n')||{}).sort((x,y)=>y[1].d.localeCompare(x[1].d));
- let h=`<div class="c p${pr}"><div class="h" onclick="tog(${b})"><span class="t">${b}</span><span class="n">${esc(p.nombre)}</span><span class="t">${esc(p.estado)}</span>
+ let h=`<div class="c p${pr}"><div class="h" onclick="tog('${b}')"><span class="t">${b}</span><span class="n">${esc(p.nombre)}</span><span class="t">${esc(p.estado)}</span>
  <span class="t ${['','red','amber','green'][pr]}">${['','Prioridad alta','Prioridad media','Prioridad baja'][pr]}</span>${ab.length?`<span class="t red">${ab.length} pendiente(s)</span>`:'<span class="t green">al día</span>'}</div>`;
  if(!o)return h+'</div>';
  h+=`<div class="b"><div class="g"><div><span>Secretaría</span>${esc(p.sec)}</div><div><span>Sector</span>${esc(p.sector)}</div><div><span>Aprobación</span>${fmt(D(p.faprob))}</div>
  <div><span>Terminación estimada</span>${fmt(D(p.fte))}</div><div><span>Paso a terminado</span>${fmt(D(p.fterm))}</div><div><span>Ejec. física / financiera</span>${esc(p.fis)} / ${esc(p.fin)}</div>
  <div><span>Programación</span>${esc(p.progv)}</div>${(p.igpr||[]).map(([l,v])=>`<div><span>${esc(l)}</span>${esc(v)}</div>`).join('')}</div>`;
- h+='<h4>Alertas y verificaciones</h4>'+(A.map(x=>`<div class="al ${x.done?'done':x.lvl}"><div>${x.done?'✅ ':''}${esc(x.t)}</div>${x.items.map(i=>`<label><input type="checkbox" ${chk(b,i.k)?'checked':''} onchange="tg(${b},'${i.k}',this.checked)"> ${esc(i.l)}</label>`).join('')}</div>`).join('')||'<span class="mu">Sin alertas.</span>');
+ h+='<h4>Alertas y verificaciones</h4>'+(A.map(x=>`<div class="al ${x.done?'done':x.lvl}"><div>${x.done?'✅ ':''}${esc(x.t)}</div>${x.items.map(i=>`<label><input type="checkbox" ${chk(b,i.k)?'checked':''} onchange="tg('${b}','${i.k}',this.checked)"> ${esc(i.l)}</label>`).join('')}</div>`).join('')||'<span class="mu">Sin alertas.</span>');
  if(p.estado==='SIN CONTRATAR')h+='<h4>Escenarios (secuenciales y excluyentes)</h4>'+[1,2,3].map(n=>{const d=n>1&&!chk(b,'e'+(n-1));return`<div class="sc" style="${d?'opacity:.5':''}"><span>${n}. ${esc(SC[n].t)}</span>
-  <label class="mu">Inicio<input type="date" value="${fld(b,`e${n}_ini`)||(n==2?p.faprob||'':'')}" onchange="sf(${b},'e${n}_ini',this.value)"></label>
-  <label class="mu">Cumplido el<input type="date" value="${fld(b,`e${n}_fin`)}" onchange="sf(${b},'e${n}_fin',this.value)"></label>
-  <label><input type="checkbox" ${chk(b,'e'+n)?'checked':''} onchange="tg(${b},'e${n}',this.checked)"> Ya pasó</label></div>`}).join('');
+  <label class="mu">Inicio<input type="date" value="${fld(b,`e${n}_ini`)||(n<=2?p.faprob||'':'')}" onchange="sf('${b}','e${n}_ini',this.value)"></label>
+  <label class="mu">Cumplido el<input type="date" value="${fld(b,`e${n}_fin`)}" onchange="sf('${b}','e${n}_fin',this.value)"></label>
+  <label><input type="checkbox" ${chk(b,'e'+n)?'checked':''} onchange="tg('${b}','e${n}',this.checked)"> Ya pasó</label></div>`}).join('');
  if(p.estado!=='SIN CONTRATAR'){const rp=+fld(b,'rp')||0,tc=[100,90,75,60,50,25,0][Math.min(rp,6)];
-  h+=`<h4>Control de ejecución</h4><div class="row"><label><input type="checkbox" ${chk(b,'avz')?'checked':''} onchange="tg(${b},'avz',this.checked)"> Avanzó física o financieramente en el trimestre (si no, se mide 100% cronograma)</label>
-  <label>Reprogramaciones con afectación al techo <input type="number" min="0" max="9" style="width:55px" value="${rp}" onchange="sf(${b},'rp',this.value)"></label><span class="t ${rp?'amber':'green'}">Techo de medición: ${tc} pts</span></div>`}
+  h+=`<h4>Control de ejecución</h4><div class="row"><label><input type="checkbox" ${chk(b,'avz')?'checked':''} onchange="tg('${b}','avz',this.checked)"> Avanzó física o financieramente en el trimestre (si no, se mide 100% cronograma)</label>
+  <label>Reprogramaciones con afectación al techo <input type="number" min="0" max="9" style="width:55px" value="${rp}" onchange="sf('${b}','rp',this.value)"></label><span class="t ${rp?'amber':'green'}">Techo de medición: ${tc} pts</span></div>`}
  h+=`<h4>Seguimiento</h4><div class="row"><select id="nt${b}"><option>Observación</option><option>Cambio</option><option>Problemática</option><option>Alerta</option></select></div>
- <textarea placeholder="Registrar cambio, problemática, gestión realizada…" oninput="draft[${b}]=this.value">${esc(draft[b]||'')}</textarea><button class="p" onclick="addNote(${b})">Guardar observación</button>`;
+ <textarea placeholder="Registrar cambio, problemática, gestión realizada…" oninput="draft['${b}']=this.value">${esc(draft[b]||'')}</textarea><button class="p" onclick="addNote('${b}')">Guardar observación</button>`;
  h+=N.map(([id,n])=>`<div class="nt ${n.r?'ok':''}"><span class="t ${n.t==='Problemática'?'red':n.t==='Alerta'?'amber':''}">${esc(n.t)}</span> <small>${esc(n.u)} · ${new Date(n.d).toLocaleString('es-CO')}${n.r?` · resuelta por ${esc(n.ru)} (${new Date(n.rd).toLocaleDateString('es-CO')})`:''}</small>
-  <div class="x">${esc(n.x)}</div><button onclick="resNote(${b},'${id}',${!n.r})">${n.r?'Reabrir':'Marcar resuelta'}</button></div>`).join('');
+  <div class="x">${esc(n.x)}</div><button onclick="resNote('${b}','${id}',${!n.r})">${n.r?'Reabrir':'Marcar resuelta'}</button></div>`).join('');
  return h+'</div></div>'}
 function render(){const fe=$('#fe').value,fs=$('#fs').value,fp=$('#fp').value,q=$('#q').value.toLowerCase(),fo=$('#fo').checked;
  const R=P.map(p=>{const A=alerts(p);return{p,A,pr:prio(p,A)}});
@@ -128,7 +128,21 @@ function render(){const fe=$('#fe').value,fs=$('#fs').value,fp=$('#fp').value,q=
  $('#ls').innerHTML=L.map(r=>card(r.p,r.A,r.pr)).join('')||'<p class="mu">Sin proyectos con esos filtros.</p>'}
 function filters(){const u=(k)=>[...new Set(P.map(p=>p[k]).filter(Boolean))].sort();const f=(id,t,k)=>{const v=$(id).value;$(id).innerHTML=`<option value="">${t}</option>`+u(k).map(x=>`<option ${x===v?'selected':''}>${esc(x)}</option>`).join('')};f('#fe','Todo estado','estado');f('#fs','Toda secretaría','sec')}
 /* ---- exportar / importar / Excel ---- */
-function exp(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,1)],{type:'application/json'}));a.download='seguimiento_igpr_'+iso(new Date())+'.json';a.click()}
+function dl(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+function expJson(){dl(new Blob([JSON.stringify(S,null,1)],{type:'application/json'}),'respaldo_igpr_'+iso(new Date())+'.json')}
+function exp(){if(typeof XLSX==='undefined'){stat('No cargó la librería de Excel: se descargó el respaldo .json');return expJson()}
+ const PR=['','Alta','Media','Baja'],fd=s=>s?new Date(s).toLocaleString('es-CO'):'',R1=[],R2=[];
+ P.forEach(p=>{const A=alerts(p),ab=A.filter(x=>!x.done),N=Object.values(sg(p.bpin,'n')||{}).sort((x,y)=>y.d.localeCompare(x.d));
+  R1.push({BPIN:p.bpin,Proyecto:p.nombre,'Secretaría':p.sec,Sector:p.sector,Estado:p.estado,Prioridad:PR[prio(p,A)],
+   'Ejec. física %':p.fis,'Ejec. financiera %':p.fin,'Terminación estimada':p.fte||'','Paso a terminado':p.fterm||'',
+   'Pendientes abiertos':ab.length,'Detalle de pendientes':ab.map(x=>'• '+x.t).join('\n'),
+   'Problemáticas sin resolver':N.filter(n=>n.t==='Problemática'&&!n.r).length,'Última observación':N[0]?N[0].x:''});
+  N.forEach(n=>R2.push({BPIN:p.bpin,Proyecto:p.nombre,Tipo:n.t,'Observación':n.x,Autor:n.u,Fecha:fd(n.d),Resuelta:n.r?'Sí':'No','Resuelta por':n.ru||'','Fecha resolución':fd(n.rd)}))});
+ const wb=XLSX.utils.book_new(),w1=XLSX.utils.json_to_sheet(R1),w2=XLSX.utils.json_to_sheet(R2.length?R2:[{BPIN:'',Proyecto:'',Tipo:'',Observación:'',Autor:'',Fecha:'',Resuelta:'','Resuelta por':'','Fecha resolución':''}]);
+ w1['!cols']=[{wch:15},{wch:60},{wch:24},{wch:24},{wch:26},{wch:10},{wch:10},{wch:12},{wch:14},{wch:14},{wch:11},{wch:70},{wch:12},{wch:50}];
+ w2['!cols']=[{wch:15},{wch:50},{wch:14},{wch:60},{wch:16},{wch:20},{wch:9},{wch:16},{wch:20}];
+ XLSX.utils.book_append_sheet(wb,w1,'Seguimiento');XLSX.utils.book_append_sheet(wb,w2,'Observaciones');
+ XLSX.writeFile(wb,'seguimiento_igpr_'+iso(new Date())+'.xlsx');stat('Excel exportado ✓')}
 $('#imp').onchange=async e=>{try{const j=JSON.parse(await e.target.files[0].text());Object.assign(S,j);persist();if(FB)fetch(FB+'/seg.json',{method:'PATCH',body:JSON.stringify(j)});render();stat('Importado ✓')}catch(x){stat('Archivo no válido')}};
 $('#xl').onchange=async e=>{try{const wb=XLSX.read(await e.target.files[0].arrayBuffer(),{type:'array',cellDates:true}),rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:null}),hi=rows.findIndex(r=>r.some(c=>String(c).trim().toUpperCase()==='BPIN'));
  const H=rows[hi].map(c=>String(c||'').trim().toUpperCase()),ix=n=>H.indexOf(n),dt=v=>v instanceof Date?iso(new Date(v.getTime()+12*36e5)):null,K={bpin:'BPIN',ent:'ENTIDAD EJECUTORA',sector:'SECTOR',nombre:'NOMBRE PROYECTO',sec:'SECRETARIA',estado:'ESTADO',fis:'EJECUCION FISICA',fin:'EJECUCION FINANCIERA',progv:'PROGRAMACION VENCIDA'};
